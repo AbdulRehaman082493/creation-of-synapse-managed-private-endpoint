@@ -1,7 +1,8 @@
 @description('Array of MPE configuration objects')
 param mpeConfigs array
 
-param env string
+@description('Environment')
+param env string 
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: 'mpe-uai'
