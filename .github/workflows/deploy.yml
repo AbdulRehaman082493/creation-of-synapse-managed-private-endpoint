@@ -5,8 +5,8 @@ on:
     inputs:
       target_environment:
         description: "Environment to deploy (nonprod or prod)"
-        type: choice
         required: true
+        type: choice
         options:
           - nonprod
           - prod
@@ -14,11 +14,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to ${{ inputs.target_environment }}
     runs-on: ubuntu-latest
-
-    env:
-      short: ${{ inputs.target_environment == 'nonprod' && 'nonprod' || 'prod' }}
 
     steps:
       - name: Checkout repository
@@ -29,12 +25,11 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Install Bicep CLI (if needed)
+      - name: Install Bicep CLI
         run: az bicep install
 
-      - name: Deploy Bicep Template to ${{ env.short }}
+      - name: Deploy Bicep Template 
         run: |
           az deployment group create \
             --resource-group "${{ vars.RESOURCE_GROUP }}" \
-            --template-file ./main.bicep \
-            --only-show-errors
+            --template-file ./main.bicep
