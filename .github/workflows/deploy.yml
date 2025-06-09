@@ -35,7 +35,7 @@ jobs:
       - name: Deploy Bicep Template to ${{ env.short }}
         run: |
           az deployment group create \
-            --resource-group "rg-${{ env.short }}" \
+            --resource-group "${{ vars.RESOURCE_GROUP }}" \
             --template-file ./main.bicep \
             --parameters @params/main.${{ env.short }}.bicepparam \
             --only-show-errors
