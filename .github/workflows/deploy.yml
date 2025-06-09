@@ -16,6 +16,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    env:
+      short: ${{ inputs.target_environment }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -27,9 +30,11 @@ jobs:
 
       - name: Install Bicep CLI
         run: az bicep install
+
       - name: Deploy Bicep Template
         run: |
           set -x
           az deployment group create \
             --resource-group rg-synapse-demo \
-            --template-file ./main.bicep
+            --template-file ./main.bicep \
+            --parameters env=${{ env.short }}
