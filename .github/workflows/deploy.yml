@@ -28,10 +28,8 @@ jobs:
       - name: Install Bicep CLI
         run: az bicep install
       - name: Deploy Bicep Template
-        env:
-          RESOURCE_GROUP: ${{ env.RESOURCE_GROUP }}
         run: |
           set -x
           az deployment group create \
-            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --resource-group rg-synapse-demo \
             --template-file ./main.bicep
