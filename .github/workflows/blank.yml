@@ -1,0 +1,41 @@
+name: Deploy Azure Resources with Bicep
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Environment to deploy (nonprod or prod)"
+        type: choice
+        required: true
+        options:
+          - nonprod
+          - prod
+        default: nonprod
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.target_environment }}
+    runs-on: ubuntu-latest
+
+    env:
+      short: ${{ inputs.target_environment == 'nonprod' && 'nonprod' || 'prod' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Bicep CLI (if needed)
+        run: az bicep install
+
+      - name: Deploy Bicep Template to ${{ env.short }}
+        run: |
+          az deployment group create \
+            --resource-group "rg-${{ env.short }}" \
+            --template-file ./main.bicep \
+            --parameters @params/main.${{ env.short }}.bicepparam \
+            --only-show-errors
