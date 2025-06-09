@@ -28,8 +28,13 @@ jobs:
       - name: Install Bicep CLI
         run: az bicep install
 
-      - name: Deploy Bicep Template 
+      - name: Set Resource Group
+        run: echo "RESOURCE_GROUP=my-${{ github.event.inputs.target_environment }}-resource-group" >> $GITHUB_ENV
+
+      - name: Deploy Bicep Template
+        env:
+          RESOURCE_GROUP: ${{ env.RESOURCE_GROUP }}
         run: |
           az deployment group create \
-            --resource-group "${{ vars.RESOURCE_GROUP }}" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
             --template-file ./main.bicep
