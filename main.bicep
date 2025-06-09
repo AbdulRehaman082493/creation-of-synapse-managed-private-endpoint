@@ -4,21 +4,25 @@ param mpeConfigs array
 @description('Environment')
 param env string 
 
+/*
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: 'mpe-uai'
   scope: resourceGroup()
 }
+*/
 
 resource mpeScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = [for (mpe, i) in mpeConfigs: {
   name: 'createMPE-${env}-${i}'
   location: resourceGroup().location
   kind: 'AzureCLI'
+  /*
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${userAssignedIdentity.id}': {}
     }
   }
+  */
   properties: {
     azCliVersion: '2.52.0'
     timeout: 'PT10M'
