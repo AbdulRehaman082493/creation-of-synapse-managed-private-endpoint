@@ -36,5 +36,4 @@ jobs:
           set -x
           az deployment group create \
             --resource-group rg-synapse-demo \
-            --template-file ./main.bicep \
-            --parameters env=${{ env.short }}
+            --template-file ./main.bicep 
