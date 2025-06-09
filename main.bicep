@@ -1,6 +1,3 @@
-@description('Environment')
-param env string
-
 @description('Array of MPE configuration objects')
 var mpeConfigs = [
   {
