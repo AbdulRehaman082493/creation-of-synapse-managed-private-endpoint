@@ -12,7 +12,7 @@ var mpeConfigs = [
 ]
 
 resource mpeScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = [for (mpe, i) in mpeConfigs: {
-  name: 'createMPE-${env}-${i}'
+  name: 'createMPE-${i}'
   location: resourceGroup().location
   kind: 'AzureCLI'
 
