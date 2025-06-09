@@ -1,3 +1,5 @@
+using '../main.bicep'
+
 param mpeConfigs = [
   {
     synapseWorkspaceName: 'synapsewsdemo123'
