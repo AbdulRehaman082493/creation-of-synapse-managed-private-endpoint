@@ -1,13 +1,15 @@
 @description('Array of MPE configuration objects')
 param mpeConfigs array
 
+param env string
+
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: 'mpe-uai'
   scope: resourceGroup()
 }
 
 resource mpeScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = [for (mpe, i) in mpeConfigs: {
-  name: 'createMPE-${i}'
+  name: 'createMPE-${env}-${i}'
   location: resourceGroup().location
   kind: 'AzureCLI'
   identity: {

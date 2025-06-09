@@ -1,5 +1,6 @@
 using '../main.bicep'
 
+param env = 'nonprd'
 param mpeConfigs = [
   {
     synapseWorkspaceName: 'synapsewsdemo123'
