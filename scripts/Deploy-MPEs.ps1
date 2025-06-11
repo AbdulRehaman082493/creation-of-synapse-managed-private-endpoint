@@ -1,10 +1,13 @@
 param (
-    [string]$EnvironmentConfig
+    [string]$EnvironmentFolder,
+    [string]$SynapseWorkspaceName
 )
+
+Write-Host "📁 Current Working Directory: $(Get-Location)"
 
 # Step 1: Parse AZURE_CREDENTIALS from GitHub Secrets
 $azureCredentials = ConvertFrom-Json -InputObject $env:AZURE_CREDENTIALS
-Write-Host "🔐 Logging in with Client ID: $($azureCredentials.clientId)"
+Write-Host "🔐 Authenticating with Client ID: $($azureCredentials.clientId)"
 
 $tenantId       = $azureCredentials.tenantId
 $clientId       = $azureCredentials.clientId
@@ -13,52 +16,83 @@ $subscriptionId = $azureCredentials.subscriptionId
 
 Connect-AzAccount -ServicePrincipal -TenantId $tenantId `
     -Credential (New-Object System.Management.Automation.PSCredential `
-        ($clientId, (ConvertTo-SecureString $clientSecret -AsPlainText -Force)))
+        ($clientId, (ConvertTo-SecureString $clientSecret -AsPlainText -Force))) | Out-Null
 
-Select-AzSubscription -SubscriptionId $subscriptionId
+Select-AzSubscription -SubscriptionId $subscriptionId | Out-Null
 
-# Step 2: Load environment config JSON
-if (-not (Test-Path $EnvironmentConfig)) {
-    Write-Error "❌ File not found: $EnvironmentConfig"
+# Step 2: Validate folder
+$repoPath = "$pwd/configs/managedPrivateEndpoints/$EnvironmentFolder"
+
+if (-not (Test-Path $repoPath)) {
+    Write-Error "[❌] Environment folder missing: $repoPath"
     exit 1
 }
 
-$envConfig = Get-Content $EnvironmentConfig | ConvertFrom-Json
-$synapseWorkspaceName = $envConfig.synapseWorkspaceName
-$resourceGroupName = $envConfig.resourceGroupName
-$mpeList = $envConfig.mpes
+# Step 3: Load all JSON files
+$files = Get-ChildItem -Path $repoPath -Filter *.json
 
-# Step 3: Create temp folder
-$tempFolder = ".\temp"
-if (-not (Test-Path $tempFolder)) {
-    New-Item -ItemType Directory -Path $tempFolder | Out-Null
+if ($files.Count -eq 0) {
+    Write-Warning "[⚠️] No JSON files found in $repoPath"
+    exit 0
 }
 
-# Step 4: Loop through MPEs and create them
-foreach ($mpe in $mpeList) {
-    $mpeName = $mpe.name
-    $tempJsonPath = "$tempFolder\$mpeName.json"
+# Step 4: Loop and deploy
+foreach ($file in $files) {
+    $filePath = $file.FullName.Trim()
+    Write-Host "`n📄 Processing file: $filePath"
 
-    # Write MPE JSON to file
-    $mpe | ConvertTo-Json -Depth 10 | Set-Content -Path $tempJsonPath -Encoding utf8
+    if (-not (Test-Path $filePath)) {
+        Write-Warning "[⚠️] Skipping missing file: $filePath"
+        continue
+    }
 
-    # ✅ FIX: removed -ResourceGroupName
-    $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $synapseWorkspaceName `
-        -Name $mpeName -ErrorAction SilentlyContinue
+    try {
+        $mpeConfig = Get-Content $filePath | ConvertFrom-Json
+    } catch {
+        Write-Warning "[❌] Failed to parse JSON in: $filePath"
+        continue
+    }
+
+    # Validate required properties
+    if (-not $mpeConfig.name -or -not $mpeConfig.properties.privateLinkResourceId -or -not $mpeConfig.properties.groupId) {
+        Write-Warning "[⚠️] Missing required fields in: $filePath"
+        continue
+    }
+
+    $mpeName = $mpeConfig.name
+
+    # Check if already exists
+    $existing = Get-AzSynapseManagedPrivateEndpoint `
+        -WorkspaceName $SynapseWorkspaceName `
+        -Name $mpeName `
+        -ErrorAction SilentlyContinue
 
     if (-not $existing) {
-        try {
-            New-AzSynapseManagedPrivateEndpoint -WorkspaceName $synapseWorkspaceName `
-                -Name $mpeName -DefinitionFile $tempJsonPath
-            Write-Host "✅ Created MPE: $mpeName"
-        } catch {
-            Write-Warning "❌ Failed to create MPE: $mpeName - $_"
+        $tempPath = ".\temp\$mpeName.json"
+        if (-not (Test-Path ".\temp")) {
+            New-Item -ItemType Directory -Path ".\temp" | Out-Null
         }
+
+        $mpeConfig | ConvertTo-Json -Depth 10 | Set-Content -Path $tempPath -Encoding utf8
+
+        try {
+            New-AzSynapseManagedPrivateEndpoint `
+                -WorkspaceName $SynapseWorkspaceName `
+                -Name $mpeName `
+                -DefinitionFile $tempPath
+            Write-Host "✅ Created: $mpeName"
+        } catch {
+            Write-Warning "❌ Failed to create $mpeName - $_"
+        }
+
+        Remove-Item -Path $tempPath -Force
     } else {
-        Write-Host "ℹ️ MPE already exists: $mpeName"
+        Write-Host "ℹ️ Already exists: $mpeName"
     }
 }
 
-# Step 5: Cleanup temp folder
-Remove-Item -Path $tempFolder -Recurse -Force
-Write-Host "🧹 Temp folder cleaned up."
+# Final Cleanup
+if (Test-Path ".\temp") {
+    Remove-Item -Path ".\temp" -Recurse -Force
+    Write-Host "`n🧹 Temp folder cleaned up."
+}
