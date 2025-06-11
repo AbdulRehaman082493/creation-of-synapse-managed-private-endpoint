@@ -1,17 +1,18 @@
-name: Deploy Synapse MPEs
+name: Deploy Synapse Managed Private Endpoints
 
 on:
   workflow_dispatch:
     inputs:
       environment:
         description: "Choose environment"
+        required: true
         type: choice
         options:
           - dev
           - test
           - nonprd
           - prod
-        required: true
+        default: nonprd
 
 jobs:
   deploy:
@@ -19,16 +20,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Az PowerShell Module
+      - name: Install Az PowerShell module
         run: pwsh -Command 'Install-Module -Name Az -Scope CurrentUser -Force -AllowClobber'
 
-      - name: Display PowerShell Version (Optional)
-        run: pwsh -Command '$PSVersionTable.PSVersion'
-
-      - name: Run PowerShell Script to Deploy MPEs
-        run: pwsh -File ./scripts/Deploy-MPEs.ps1 -EnvironmentFolder "${{ inputs.environment }}" -SynapseWorkspaceName "synapsewsdemo123"
+      - name: Run PowerShell script to deploy MPEs
+        run: |
+          pwsh -File ./scripts/Deploy-MPEs.ps1 `
+            -EnvironmentFolder "${{ inputs.environment }}" `
+            -SynapseWorkspaceName "synapsewsdemo123"
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
