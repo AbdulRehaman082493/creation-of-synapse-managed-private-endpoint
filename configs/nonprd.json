@@ -1,6 +1,6 @@
 {
-    "synapseWorkspaceName": "synapsews-dev",
-    "resourceGroupName": "rg-synapse-dev",
+    "synapseWorkspaceName": "synapsewsdemo123",
+    "resourceGroupName": "rg-synapse-demo",
     "mpes": [
       {
         "name": "mpe1",
