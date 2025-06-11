@@ -12,7 +12,8 @@ on:
           - test
           - stage
           - prod
-        default: dev
+          - nonprod
+        default: nonprd
 
 jobs:
   deploy-mpes:
@@ -36,11 +37,3 @@ jobs:
         run: |
           echo "🔍 Validating input: ${{ inputs.environment }}"
           ls ./configs/managedPrivateEndpoints/${{ inputs.environment }} || echo "⚠️ Folder empty or not found"
-
-      - name: Run PowerShell script to deploy MPEs
-        run: |
-          pwsh ./scripts/Deploy-MPEs.ps1 `
-            -EnvironmentFolder "${{ inputs.environment }}" `
-            -SynapseWorkspaceName "synapsewsdemo123"
-        env:
-          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
