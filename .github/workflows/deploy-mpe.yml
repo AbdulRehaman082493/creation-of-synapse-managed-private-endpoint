@@ -10,16 +10,13 @@ on:
         options:
           - dev
           - test
-          - nonprd
           - prod
           - stage
-        default: nonprd
+        default: test
 
 jobs:
   deploy-managed-private-endpoints:
-    runs-on:
-      group: azure-large-runners
-      labels: ubuntu-azure-large
+    runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
 
     steps:
