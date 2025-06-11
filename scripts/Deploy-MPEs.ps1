@@ -6,7 +6,7 @@ param (
     [string]$SynapseWorkspaceName
 )
 
-# Parse Azure credentials
+# Parse Azure credentials from GitHub Actions secret
 $azureCredentials = $env:AZURE_CREDENTIALS | ConvertFrom-Json
 Write-Host "🔐 Logging in with Client ID: $($azureCredentials.clientId)"
 
@@ -34,11 +34,12 @@ Get-ChildItem -Path $configFolder -Filter *.json | ForEach-Object {
 
     $mpeConfig = Get-Content $filePath | ConvertFrom-Json
     $mpeName = $mpeConfig.name
-    $definitionTempFile = "$env:TEMP\$mpeName.json"
 
-    # Save definition to temp file
+    # Write definition to temp file within script directory to avoid permission issues
+    $definitionTempFile = Join-Path -Path $PSScriptRoot -ChildPath "$mpeName.json"
     $mpeConfig | ConvertTo-Json -Depth 10 | Set-Content -Path $definitionTempFile -Encoding utf8
 
+    # Check for existing MPE
     $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName -Name $mpeName -ErrorAction SilentlyContinue
 
     if (-not $existing) {
@@ -54,5 +55,6 @@ Get-ChildItem -Path $configFolder -Filter *.json | ForEach-Object {
         Write-Host "ℹ️ MPE already exists: $mpeName"
     }
 
+    # Clean up the temporary file
     Remove-Item -Path $definitionTempFile -Force -ErrorAction SilentlyContinue
 }
