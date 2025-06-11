@@ -27,9 +27,6 @@ jobs:
         run: pwsh -Command 'Install-Module -Name Az -Scope CurrentUser -Force -AllowClobber'
 
       - name: Run PowerShell script to deploy MPEs
-        run: |
-          pwsh -File ./scripts/Deploy-MPEs.ps1 `
-            -EnvironmentFolder "${{ inputs.environment }}" `
-            -SynapseWorkspaceName "synapsewsdemo123"
+        run: pwsh -File ./scripts/Deploy-MPEs.ps1 -EnvironmentFolder "${{ inputs.environment }}" -SynapseWorkspaceName "synapsewsdemo123"
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
