@@ -15,18 +15,20 @@ on:
 
 jobs:
   deploy:
+    name: Deploy MPEs to ${{ inputs.environment }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Install Az PowerShell
+      - name: Install Az PowerShell Module
         run: pwsh -Command 'Install-Module -Name Az -Scope CurrentUser -Force -AllowClobber'
 
-      - name: Deploy MPEs
-        run: pwsh ./scripts/Deploy-MPEs.ps1 `
-               -EnvironmentFolder "${{ inputs.environment }}" `
-               -SynapseWorkspaceName "synapsewsdemo123"
+      - name: Display PowerShell Version (Optional)
+        run: pwsh -Command '$PSVersionTable.PSVersion'
+
+      - name: Run PowerShell Script to Deploy MPEs
+        run: pwsh -File ./scripts/Deploy-MPEs.ps1 -EnvironmentFolder "${{ inputs.environment }}" -SynapseWorkspaceName "synapsewsdemo123"
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
