@@ -12,8 +12,8 @@ on:
           - test
           - stage
           - prod
-          - nonprod
-        default: dev
+          - nonprd
+        default: nonprd
 
 jobs:
   deploy-mpes:
