@@ -10,9 +10,10 @@ on:
         options:
           - dev
           - test
+          - nonprd
           - prod
           - stage
-        default: test
+        default: nonprd
 
 jobs:
   deploy-managed-private-endpoints:
