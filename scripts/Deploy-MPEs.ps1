@@ -34,15 +34,17 @@ if (-not (Test-Path $tempFolder)) {
     New-Item -ItemType Directory -Path $tempFolder | Out-Null
 }
 
-# Step 4: Loop through MPEs
+# Step 4: Loop through MPEs and create them
 foreach ($mpe in $mpeList) {
     $mpeName = $mpe.name
     $tempJsonPath = "$tempFolder\$mpeName.json"
 
+    # Write MPE JSON to file
     $mpe | ConvertTo-Json -Depth 10 | Set-Content -Path $tempJsonPath -Encoding utf8
 
+    # ✅ FIX: removed -ResourceGroupName
     $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $synapseWorkspaceName `
-        -Name $mpeName -ResourceGroupName $resourceGroupName -ErrorAction SilentlyContinue
+        -Name $mpeName -ErrorAction SilentlyContinue
 
     if (-not $existing) {
         try {
@@ -57,6 +59,6 @@ foreach ($mpe in $mpeList) {
     }
 }
 
-# Step 5: Cleanup
+# Step 5: Cleanup temp folder
 Remove-Item -Path $tempFolder -Recurse -Force
 Write-Host "🧹 Temp folder cleaned up."
