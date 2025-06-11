@@ -1,0 +1,21 @@
+{
+    "synapseWorkspaceName": "synapsews-dev",
+    "resourceGroupName": "rg-synapse-dev",
+    "mpes": [
+      {
+        "name": "mpe-kv-dev",
+        "properties": {
+          "privateLinkResourceId": "/subscriptions/xxxx/resourceGroups/rg-synapse-dev/providers/Microsoft.KeyVault/vaults/kv-dev",
+          "groupId": "vault"
+        }
+      },
+      {
+        "name": "mpe-storage-dev",
+        "properties": {
+          "privateLinkResourceId": "/subscriptions/xxxx/resourceGroups/rg-synapse-dev/providers/Microsoft.Storage/storageAccounts/storageacctdev",
+          "groupId": "blob"
+        }
+      }
+    ]
+  }
+  

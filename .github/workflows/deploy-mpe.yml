@@ -1,0 +1,39 @@
+name: Deploy Managed Private Endpoints for Synapse Workspace
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy:"
+        type: choice
+        required: true
+        options:
+          - dev
+          - test
+          - prod
+          - stage
+        default: test
+
+jobs:
+  deploy-managed-private-endpoints:
+    runs-on:
+      group: azure-large-runners
+      labels: ubuntu-azure-large
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Az PowerShell Modules
+        shell: pwsh
+        run: |
+          Install-Module -Name Az -AllowClobber -Scope CurrentUser -Force
+          Install-Module -Name Az.Synapse -AllowClobber -Scope CurrentUser -Force
+
+      - name: Deploy Managed Private Endpoints
+        shell: pwsh
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          ./scripts/Deploy-MPEs.ps1 -EnvironmentConfig "./configs/${{ github.event.inputs.environment }}.json"
