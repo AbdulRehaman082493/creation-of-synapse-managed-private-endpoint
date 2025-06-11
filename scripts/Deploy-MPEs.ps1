@@ -1,10 +1,14 @@
 param (
     [Parameter(Mandatory = $true)]
-    [string]$EnvironmentFolder,
-
-    [Parameter(Mandatory = $true)]
-    [string]$SynapseWorkspaceName
+    [string]$EnvironmentFolder
 )
+
+# Fetch Synapse Workspace name from GitHub Environment variable
+$SynapseWorkspaceName = $env:SYNAPSE_WORKSPACE_NAME
+if (-not $SynapseWorkspaceName) {
+    Write-Error "❌ Environment variable 'SYNAPSE_WORKSPACE_NAME' not found. Ensure it's set in GitHub Environments."
+    exit 1
+}
 
 # Parse Azure credentials from GitHub Actions secret
 $azureCredentials = $env:AZURE_CREDENTIALS | ConvertFrom-Json
