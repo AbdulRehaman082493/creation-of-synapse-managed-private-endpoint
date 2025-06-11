@@ -17,9 +17,7 @@ on:
 
 jobs:
   deploy-endpoints:
-    runs-on:
-      group: azure-large-runners
-      labels: ubuntu-azure-large
+    runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
       - name: Checkout Repository
