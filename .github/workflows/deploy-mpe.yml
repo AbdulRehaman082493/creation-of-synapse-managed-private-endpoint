@@ -1,71 +1,46 @@
-name: Deploy Managed Private Endpoints for Synapse Workspace
+name: Deploy Managed Private Endpoints for Synapse
 
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Select environment to deploy."
-        type: choice
+        description: "Select environment folder to deploy from"
         required: true
+        type: choice
         options:
           - dev
           - test
-          - nonprd
           - stage
           - prod
-        default: nonprd
+        default: dev
 
 jobs:
-  deploy-endpoints:
+  deploy-mpes:
+    name: Deploy MPEs to ${{ inputs.environment }}
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Install Az PowerShell Module
-        run: |
-          pwsh -Command 'Install-Module -Name Az -AllowClobber -Scope CurrentUser -Force'
-
-      - name: Ensure Environment Directory Exists
-        run: |
-          if [ ! -d "./configs/managedprivateendpoints/${{ github.event.inputs.environment }}" ]; then
-            echo "Environment directory does not exist!"
-            exit 1
-          fi
-
-      - name: List Config Files
-        run: |
-          ls ./configs/managedprivateendpoints/${{ github.event.inputs.environment }} || echo "No JSON files found"
-
-      - name: Debug Environment Folder
-        run: |
-          echo "Using environment folder: ./configs/managedprivateendpoints/${{ github.event.inputs.environment }}"
-
-      - name: Verify Azure Credentials
-        run: |
-          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
-            echo "Azure credentials are missing!"
-            exit 1
-          fi
-
-      - name: Azure Login
-        uses: azure/login@v1
+      - name: Set up PowerShell Core
+        uses: PowerShell/Setup-PowerShell@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          pwsh-version: '7.2.x'
 
-      - name: Run Managed Private Endpoint Deployment Script
+      - name: Install Az PowerShell module
         run: |
-          pwsh ./scripts/AddManagedPrivateEndpoints.ps1 -environmentFolder "./configs/managedprivateendpoints/${{ github.event.inputs.environment }}"
+          pwsh -Command 'Install-Module -Name Az -AllowClobber -Force -Scope CurrentUser'
 
-      - name: Debug - List Directory Contents
+      - name: Verify input and folder
         run: |
-          ls ./configs/managedprivateendpoints/${{ github.event.inputs.environment }} || echo "No directory found"
+          echo "🔍 Validating input: ${{ inputs.environment }}"
+          ls ./configs/managedPrivateEndpoints/${{ inputs.environment }} || echo "⚠️ Folder empty or not found"
 
-      - name: Debug - Check for JSON Files
+      - name: Run PowerShell script to deploy MPEs
         run: |
-          ls ./configs/managedprivateendpoints/${{ github.event.inputs.environment }}/*.json || echo "No JSON files present"
-
-      - name: Debug - Show Azure Context
-        run: |
-          pwsh -Command 'Get-AzContext'
+          pwsh ./scripts/Deploy-MPEs.ps1 `
+            -EnvironmentFolder "${{ inputs.environment }}" `
+            -SynapseWorkspaceName "synapsewsdemo123"
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
