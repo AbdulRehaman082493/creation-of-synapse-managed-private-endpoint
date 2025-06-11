@@ -6,47 +6,34 @@ param (
     [string]$SynapseWorkspaceName
 )
 
-# Step 1: Authenticate to Azure
-$azureCredentials = ConvertFrom-Json -InputObject $env:AZURE_CREDENTIALS
-Write-Host "🔐 Logging in with Client ID: $($azureCredentials.clientId)"
+# Parse Azure credentials from GitHub Actions secret
+$azureCredentials = $env:AZURE_CREDENTIALS | ConvertFrom-Json
+Connect-AzAccount -ServicePrincipal -TenantId $azureCredentials.tenantId `
+    -Credential (New-Object System.Management.Automation.PSCredential (
+        $azureCredentials.clientId,
+        (ConvertTo-SecureString $azureCredentials.clientSecret -AsPlainText -Force)
+    )) | Out-Null
+Select-AzSubscription -SubscriptionId $azureCredentials.subscriptionId | Out-Null
 
-$tenantId       = $azureCredentials.tenantId
-$clientId       = $azureCredentials.clientId
-$clientSecret   = $azureCredentials.clientSecret
-$subscriptionId = $azureCredentials.subscriptionId
-
-Connect-AzAccount -ServicePrincipal -TenantId $tenantId `
-    -Credential (New-Object System.Management.Automation.PSCredential `
-        ($clientId, (ConvertTo-SecureString $clientSecret -AsPlainText -Force))) | Out-Null
-
-Select-AzSubscription -SubscriptionId $subscriptionId | Out-Null
-
-# Step 2: Locate config folder
+# Path to the config folder for the selected environment
 $configFolder = "./configs/managedPrivateEndpoints/$EnvironmentFolder"
+
 if (-not (Test-Path $configFolder)) {
-    Write-Error "❌ Environment config folder not found: $configFolder"
+    Write-Error "❌ Config folder not found: $configFolder"
     exit 1
 }
 
-# Step 3: Loop through and apply each JSON file
+# Loop through each JSON config and create MPE
 Get-ChildItem -Path $configFolder -Filter *.json | ForEach-Object {
     $file = $_.FullName
-    Write-Host "📄 Processing file: $file"
+    $mpeName = (Get-Content $file | ConvertFrom-Json).name
 
-    $mpeConfig = Get-Content $file | ConvertFrom-Json
-    $mpeName = $mpeConfig.name
-
-    # Check if already exists
-    $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName `
-        -Name $mpeName -ErrorAction SilentlyContinue
+    $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName -Name $mpeName -ErrorAction SilentlyContinue
 
     if (-not $existing) {
         try {
-            New-AzSynapseManagedPrivateEndpoint `
-                -WorkspaceName $SynapseWorkspaceName `
-                -Name $mpeName `
-                -DefinitionFile $file
-
+            Write-Host "🚀 Creating: $mpeName"
+            New-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName -Name $mpeName -DefinitionFile $file
             Write-Host "✅ Created MPE: $mpeName"
         } catch {
             Write-Warning "❌ Failed to create MPE: $mpeName - $_"
