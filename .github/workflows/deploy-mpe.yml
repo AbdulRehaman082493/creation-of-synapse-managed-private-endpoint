@@ -13,7 +13,7 @@ on:
           - stage
           - prod
           - nonprod
-        default: nonprd
+        default: dev
 
 jobs:
   deploy-mpes:
@@ -24,10 +24,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up PowerShell Core
-        uses: PowerShell/Setup-PowerShell@v1
-        with:
-          pwsh-version: '7.2.x'
+      - name: Display PowerShell version
+        run: pwsh -Command '$PSVersionTable.PSVersion'
 
       - name: Install Az PowerShell module
         run: |
@@ -37,3 +35,11 @@ jobs:
         run: |
           echo "🔍 Validating input: ${{ inputs.environment }}"
           ls ./configs/managedPrivateEndpoints/${{ inputs.environment }} || echo "⚠️ Folder empty or not found"
+
+      - name: Run PowerShell script to deploy MPEs
+        run: |
+          pwsh ./scripts/Deploy-MPEs.ps1 `
+            -EnvironmentFolder "${{ inputs.environment }}" `
+            -SynapseWorkspaceName "synapsewsdemo123"
+        env:
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
