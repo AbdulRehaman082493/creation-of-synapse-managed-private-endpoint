@@ -6,34 +6,46 @@ param (
     [string]$SynapseWorkspaceName
 )
 
-# Parse Azure credentials from GitHub Actions secret
+# Parse Azure credentials
 $azureCredentials = $env:AZURE_CREDENTIALS | ConvertFrom-Json
-Connect-AzAccount -ServicePrincipal -TenantId $azureCredentials.tenantId `
-    -Credential (New-Object System.Management.Automation.PSCredential (
-        $azureCredentials.clientId,
-        (ConvertTo-SecureString $azureCredentials.clientSecret -AsPlainText -Force)
-    )) | Out-Null
-Select-AzSubscription -SubscriptionId $azureCredentials.subscriptionId | Out-Null
+Write-Host "🔐 Logging in with Client ID: $($azureCredentials.clientId)"
 
-# Path to the config folder for the selected environment
-$configFolder = "./configs/managedPrivateEndpoints/$EnvironmentFolder"
+$tenantId       = $azureCredentials.tenantId
+$clientId       = $azureCredentials.clientId
+$clientSecret   = $azureCredentials.clientSecret
+$subscriptionId = $azureCredentials.subscriptionId
 
+# Login and set subscription
+Connect-AzAccount -ServicePrincipal -TenantId $tenantId `
+    -Credential (New-Object PSCredential ($clientId, (ConvertTo-SecureString $clientSecret -AsPlainText -Force))) | Out-Null
+Select-AzSubscription -SubscriptionId $subscriptionId | Out-Null
+
+# Locate config folder relative to script path
+$configFolder = Join-Path -Path $PSScriptRoot -ChildPath "../configs/managedPrivateEndpoints/$EnvironmentFolder"
 if (-not (Test-Path $configFolder)) {
     Write-Error "❌ Config folder not found: $configFolder"
     exit 1
 }
 
-# Loop through each JSON config and create MPE
+# Loop through all JSON files in the environment folder
 Get-ChildItem -Path $configFolder -Filter *.json | ForEach-Object {
-    $file = $_.FullName
-    $mpeName = (Get-Content $file | ConvertFrom-Json).name
+    $filePath = $_.FullName
+    Write-Host "📄 Processing file: $filePath"
+
+    $mpeConfig = Get-Content $filePath | ConvertFrom-Json
+    $mpeName = $mpeConfig.name
+    $definitionTempFile = "$env:TEMP\$mpeName.json"
+
+    # Save definition to temp file
+    $mpeConfig | ConvertTo-Json -Depth 10 | Set-Content -Path $definitionTempFile -Encoding utf8
 
     $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName -Name $mpeName -ErrorAction SilentlyContinue
 
     if (-not $existing) {
         try {
-            Write-Host "🚀 Creating: $mpeName"
-            New-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName -Name $mpeName -DefinitionFile $file
+            New-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName `
+                -Name $mpeName `
+                -DefinitionFile $definitionTempFile | Out-Null
             Write-Host "✅ Created MPE: $mpeName"
         } catch {
             Write-Warning "❌ Failed to create MPE: $mpeName - $_"
@@ -41,4 +53,6 @@ Get-ChildItem -Path $configFolder -Filter *.json | ForEach-Object {
     } else {
         Write-Host "ℹ️ MPE already exists: $mpeName"
     }
+
+    Remove-Item -Path $definitionTempFile -Force -ErrorAction SilentlyContinue
 }
