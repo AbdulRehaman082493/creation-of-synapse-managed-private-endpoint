@@ -1,0 +1,10 @@
+{
+  "name": "mpe-custom-pls",
+  "properties": {
+    "privateLinkServiceId": "/subscriptions/06aa5329-5b5a-4789-bfe4-f8c2bfd81041/resourceGroups/rg-pls-demo/providers/Microsoft.Network/privateLinkServices/pls-demo",
+    "requestMessage": "Please approve access to custom PLS",
+    "fqdns": [
+      "my.internal.service"  // Replace with your actual domain expected by consumer
+    ]
+  }
+}
