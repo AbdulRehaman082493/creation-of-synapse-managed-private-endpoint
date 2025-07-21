@@ -78,6 +78,8 @@ foreach ($filePath in $files) {
 
     $privateLinkResourceId = $rawConfig.properties.privateLinkResourceId
     $groupId = $rawConfig.properties.groupId
+    $requestMessage = $rawConfig.properties.requestMessage
+    $fqdns = $rawConfig.properties.fqdns
 
     if (-not $mpeName -or -not $privateLinkResourceId -or -not $groupId) {
         Write-Warning "[WARNING] Missing required fields (name, privateLinkResourceId, groupId) in file: $filePath"
@@ -88,6 +90,8 @@ foreach ($filePath in $files) {
     Write-Host "  Name        : $mpeName"
     Write-Host "  Resource ID : $privateLinkResourceId"
     Write-Host "  Group ID    : $groupId"
+    if ($requestMessage) { Write-Host "  Request Msg : $requestMessage" }
+    if ($fqdns) { Write-Host "  FQDNs       : $($fqdns -join ', ')" }
 
     # Create a temporary JSON definition file
     $tempFile = Join-Path -Path $PSScriptRoot -ChildPath "$mpeName.json"
@@ -97,9 +101,22 @@ foreach ($filePath in $files) {
             privateLinkResourceId = $privateLinkResourceId
             groupId               = $groupId
         }
-    } | ConvertTo-Json -Depth 10
+    }
 
-    Set-Content -Path $tempFile -Value $definitionJson -Encoding UTF8
+    # Add optional fields if present
+    if ($requestMessage) {
+        $definitionJson.properties.requestMessage = $requestMessage
+    }
+    if ($fqdns) {
+        $definitionJson.properties.fqdns = $fqdns
+    }
+
+    # Debug: Show full JSON definition
+    Write-Host "[DEBUG] Final JSON:"
+    $definitionJson | ConvertTo-Json -Depth 10 | Write-Host
+
+    # Save to temp file
+    $definitionJson | ConvertTo-Json -Depth 10 | Set-Content -Path $tempFile -Encoding utf8
 
     # Check if the MPE already exists
     Write-Host "[DEBUG] Checking if MPE exists: $mpeName"
