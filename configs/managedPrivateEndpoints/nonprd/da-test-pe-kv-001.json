@@ -1,7 +1,7 @@
 {
     "name": "da-test-pe-kv-001",
     "properties": {
-      "privateLinkResourceId": "/subscriptions/1ad372fa-1532-4709-9b46-17de54fa0b71/resourceGroups/rg-synapse-demo/providers/Microsoft.KeyVault/vaults/keyvault89776876876",
+      "privateLinkResourceId": "/subscriptions/1ad372fa-1532-4709-9b46-17de54fa0b71/resourceGroups/rg-synapse-demo/providers/Microsoft.KeyVault/vaults/synapsekv5z7o9u",
       "groupId": "vault"
     }
   }
