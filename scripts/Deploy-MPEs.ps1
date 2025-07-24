@@ -1,11 +1,12 @@
 param (
     [Parameter(Mandatory = $true)]
-    [string]$EnvironmentFolder  # Pass only the name without `.json`
+    [string]$EnvironmentFolder  
+    # Pass only the name without `.json`
 )
 
 Write-Host "`n===== Starting Synapse MPE Deployment Script =====`n"
 
-# Step 1: Get Synapse workspace name
+# Step 1: Get Synapse workspace name from env var
 $SynapseWorkspaceName = $env:SYNAPSE_WORKSPACE_NAME
 if (-not $SynapseWorkspaceName) {
     Write-Error "[ERROR] Environment variable 'SYNAPSE_WORKSPACE_NAME' not found. Ensure it's set in GitHub Environments."
@@ -38,24 +39,25 @@ Connect-AzAccount -ServicePrincipal `
         -ArgumentList $azureCredentials.clientId, (ConvertTo-SecureString $azureCredentials.clientSecret -AsPlainText -Force)) `
     | Out-Null
 
+# Set the Azure subscription context
 Set-AzContext -SubscriptionId $azureCredentials.subscriptionId | Out-Null
 
-# Step 4: Locate config folder
+# Step 4: Locate and load the config file
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $configFolder = Join-Path -Path $repoRoot -ChildPath "configs/managedPrivateEndpoints/$EnvironmentFolder"
 Write-Host "[INFO] Looking for config file: $configFolder"
 
 if (-not (Test-Path $configFolder)) {
-    Write-Error "[ERROR] Config folder not found: $configFolder"
+    Write-Error "[ERROR] Config file not found: $configFolder"
     exit 1
 }
 
-# Step 5: Read all config files
+# Step 5: Get list of JSON files from the config folder
 $files = Get-ChildItem -Path $configFolder -Filter *.json | Select-Object -ExpandProperty FullName
 Write-Host "[INFO] Found config file(s):"
 $files | ForEach-Object { Write-Host "  - $_" }
 
-# Step 6: Process files
+# Step 6: Process the config file
 foreach ($filePath in $files) {
     Write-Host "`n[INFO] Processing file: $filePath"
 
@@ -66,6 +68,7 @@ foreach ($filePath in $files) {
         continue
     }
 
+    # Validation: Filename matches Json name field
     $fileName = [System.IO.Path]::GetFileNameWithoutExtension($filePath)
     $mpeName = $rawConfig.name
     $props = $rawConfig.properties
@@ -74,42 +77,41 @@ foreach ($filePath in $files) {
         Write-Warning "[WARNING] File name '$fileName' does not match 'name' value '$mpeName'. Skipping."
         continue
     }
-
-    # Extract properties
+    # Extract required properties
     $privateLinkResourceId = $props.privateLinkResourceId
-    $groupId               = $props.groupId
-    $privateLinkServiceId  = $props.privateLinkServiceId
-    $requestMessage        = $props.requestMessage
-    $fqdns                 = $props.fqdns
+    $groupId = $props.groupId
+    $privateLinkServiceId = $props.privateLinkServiceId
+    $requestMessage = $props.requestMessage
+    $fqdns = $props.fqdns
 
     # Validate presence of required fields
-    if (-not $mpeName -or (-not $privateLinkResourceId -and -not $privateLinkServiceId)) {
+    if (-not $mpeName -or (-not $privateLinkResourceId -and -not $privateLinkServiceId)){
         Write-Warning "[WARNING] Missing required fields. Either 'privateLinkResourceId' and 'groupId', OR 'privateLinkServiceId' must be provided. Skipping: $filePath"
         continue
     }
 
-    # Output debug info
+    # Output debug information
     Write-Host "[DEBUG] MPE Details:"
-    Write-Host "  Name                  : $mpeName"
-    if ($privateLinkResourceId) { Write-Host "  Resource ID           : $privateLinkResourceId" }
-    if ($groupId)              { Write-Host "  Group ID              : $groupId" }
-    if ($privateLinkServiceId) { Write-Host "  Private Link Service  : $privateLinkServiceId" }
-    if ($requestMessage)       { Write-Host "  Request Message       : $requestMessage" }
-    if ($fqdns)                { Write-Host "  FQDNs                 : $($fqdns -join ', ')" }
+    Write-Host "  Name       : $mpeName"
+    if ($privateLinkResourceId) { Write-Host "  Resource ID: $privateLinkResourceId" }
+    if ($groupId)               { Write-Host "  Group ID   : $groupId" }
+    if ($privateLinkServiceId)  { Write-Host "  Service ID : $privateLinkServiceId" }
+    if ($requestMessage)        { Write-Host "  Request Msg: $requestMessage" }
+    if ($fqdns)                 { Write-Host "  FQDNs      : $($fqdns -join ', ')" }
+    Write-Host "  Resource ID: $privateLinkResourceId"
+    Write-Host "  Group ID   : $groupId"
 
-    # Construct MPE definition
+    # Create the temp JSON definition file
     $definitionJson = @{
         name       = $mpeName
         properties = @{}
     }
-
     if ($privateLinkServiceId) {
         $definitionJson.properties.privateLinkServiceId = $privateLinkServiceId
     } else {
         $definitionJson.properties.privateLinkResourceId = $privateLinkResourceId
         $definitionJson.properties.groupId = $groupId
     }
-
     if ($requestMessage) {
         $definitionJson.properties.requestMessage = $requestMessage
     }
@@ -121,7 +123,8 @@ foreach ($filePath in $files) {
     $tempFile = Join-Path -Path $PSScriptRoot -ChildPath "$mpeName.json"
     $definitionJson | ConvertTo-Json -Depth 10 | Set-Content -Path $tempFile -Encoding UTF8
 
-    # Check for existing MPE
+
+    # Check if the MPE already exists
     Write-Host "[DEBUG] Checking if MPE exists: $mpeName"
     $existing = Get-AzSynapseManagedPrivateEndpoint -WorkspaceName $SynapseWorkspaceName -Name $mpeName -ErrorAction SilentlyContinue
 
@@ -139,7 +142,7 @@ foreach ($filePath in $files) {
         Write-Host "[INFO] MPE already exists: $mpeName"
     }
 
-    # Clean up temp file
+    # Clean up
     Remove-Item -Path $tempFile -Force -ErrorAction SilentlyContinue
 }
 
