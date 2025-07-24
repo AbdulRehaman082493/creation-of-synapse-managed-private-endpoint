@@ -4,6 +4,19 @@ on:
   schedule:
     - cron: "*/10 * * * *"  # Every 10 minutes
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Select environment folder to deploy from"
+        required: true
+        type: choice
+        options:
+          - dev
+          - test
+          - stage
+          - prod
+          - nonprd
+        default: nonprd
+
 
 jobs:
   notify:
