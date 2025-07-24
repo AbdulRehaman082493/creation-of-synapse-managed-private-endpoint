@@ -33,9 +33,7 @@ if ($pending.Count -gt 0) {
 
   # ✅ Multiple recipients
   $to = @(
-    "approver1@yourdomain.com",
-    "approver2@yourdomain.com",
-    "teamlead@yourdomain.com"
+    "rehu493@gmail.com"
   )
 
   $subject = "🚨 Synapse MPE(s) Pending Approval"
