@@ -10,8 +10,8 @@ Set-AzContext -SubscriptionId $azureCredentials.subscriptionId | Out-Null
 $workspaceName = $env:SYNAPSE_WORKSPACE_NAME
 $resourceGroupName = "rg-synapse-demo" # Update if needed
 
-# Step 2: REST call to list MPEs
-$token = (Get-AzAccessToken).Token
+# ✅ Step 2: REST call to list MPEs (get token for ARM)
+$token = (Get-AzAccessToken -ResourceUrl "https://management.azure.com/").Token
 $uri = "https://management.azure.com/subscriptions/$($azureCredentials.subscriptionId)/resourceGroups/$resourceGroupName/providers/Microsoft.Synapse/workspaces/$workspaceName/managedVirtualNetworks/default/managedPrivateEndpoints?api-version=2021-06-01"
 $response = Invoke-RestMethod -Uri $uri -Headers @{ Authorization = "Bearer $token" } -Method GET
 
@@ -34,6 +34,7 @@ if ($pending.Count -gt 0) {
   # ✅ Multiple recipients
   $to = @(
     "rehu493@gmail.com"
+    # Add more if needed
   )
 
   $subject = "🚨 Synapse MPE(s) Pending Approval"
