@@ -1,0 +1,30 @@
+name: Notify Pending MPEs
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # Every 10 minutes
+  workflow_dispatch:
+
+jobs:
+  notify:
+    name: Check for Pending MPEs
+    runs-on: ubuntu-latest
+
+    env:
+      SYNAPSE_WORKSPACE_NAME: ${{ vars.SYNAPSE_WORKSPACE_NAME }}
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+      OUTLOOK_USERNAME: ${{ secrets.OUTLOOK_USERNAME }}
+      OUTLOOK_PASSWORD: ${{ secrets.OUTLOOK_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Display PowerShell version
+        run: pwsh -Command '$PSVersionTable.PSVersion'
+
+      - name: Install Az PowerShell module
+        run: pwsh -Command 'Install-Module -Name Az -AllowClobber -Force -Scope CurrentUser'
+
+      - name: Run PowerShell script to notify pending MPEs
+        run: pwsh ./scripts/Notify-Pending-MPEs.ps1
