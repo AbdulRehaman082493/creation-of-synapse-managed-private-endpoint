@@ -2,20 +2,33 @@ param()
 
 # Step 1: Parse credentials
 $azureCredentials = ConvertFrom-Json $env:AZURE_CREDENTIALS
+
 Connect-AzAccount -ServicePrincipal `
   -TenantId $azureCredentials.tenantId `
-  -Credential (New-Object -TypeName PSCredential -ArgumentList $azureCredentials.clientId, (ConvertTo-SecureString $azureCredentials.clientSecret -AsPlainText -Force)) | Out-Null
+  -Credential (New-Object -TypeName PSCredential -ArgumentList $azureCredentials.clientId, (ConvertTo-SecureString $azureCredentials.clientSecret -AsPlainText -Force)) `
+  | Out-Null
+
+# ✅ Set context and avoid subscription warning
+Update-AzConfig -DefaultSubscriptionForLogin $azureCredentials.subscriptionId
 Set-AzContext -SubscriptionId $azureCredentials.subscriptionId | Out-Null
 
+# Step 2: Setup workspace and resource group
 $workspaceName = $env:SYNAPSE_WORKSPACE_NAME
-$resourceGroupName = "rg-synapse-demo" # Update if needed
+$resourceGroupName = "rg-synapse-demo" # Update if dynamic later
 
-# ✅ Step 2: REST call to list MPEs (get token for ARM)
-$token = (Get-AzAccessToken -ResourceUrl "https://management.azure.com/").Token
+# ✅ Step 3: REST call to list MPEs (get token for ARM)
+$accessToken = (Get-AzAccessToken -ResourceUrl "https://management.azure.com/").Token
+
 $uri = "https://management.azure.com/subscriptions/$($azureCredentials.subscriptionId)/resourceGroups/$resourceGroupName/providers/Microsoft.Synapse/workspaces/$workspaceName/managedVirtualNetworks/default/managedPrivateEndpoints?api-version=2021-06-01"
-$response = Invoke-RestMethod -Uri $uri -Headers @{ Authorization = "Bearer $token" } -Method GET
 
-# Step 3: Filter for pending MPEs
+try {
+    $response = Invoke-RestMethod -Uri $uri -Headers @{ Authorization = "Bearer $accessToken" } -Method GET
+} catch {
+    Write-Error "[ERROR] Failed to retrieve MPEs: $_"
+    exit 1
+}
+
+# Step 4: Filter for pending MPEs
 $pending = $response.value | Where-Object {
   $_.properties.privateLinkServiceConnectionState.status -eq 'Pending'
 }
@@ -26,7 +39,7 @@ if ($pending.Count -gt 0) {
     Write-Host " - $($_.name) -> $($_.properties.privateLinkResourceId)"
   }
 
-  # Step 4: Email settings
+  # Email configuration
   $smtpServer = "smtp.office365.com"
   $smtpPort = 587
   $from = $env:OUTLOOK_USERNAME
@@ -34,7 +47,7 @@ if ($pending.Count -gt 0) {
   # ✅ Multiple recipients
   $to = @(
     "rehu493@gmail.com"
-    # Add more if needed
+    # Add more emails here
   )
 
   $subject = "🚨 Synapse MPE(s) Pending Approval"
