@@ -1,0 +1,209 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "Recurrence": {
+                "type": "Recurrence",
+                "recurrence": {
+                    "interval": 5,
+                    "frequency": "Minute"
+                }
+            }
+        },
+        "actions": {
+            "HTTP": {
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://synapsewsdemo123.dev.azuresynapse.net/managedVirtualNetworks/default/managedPrivateEndpoints?api-version=2020-12-01",
+                    "method": "GET",
+                    "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://dev.azuresynapse.net/"
+                    }
+                },
+                "runAfter": {}
+            },
+            "Parse_JSON": {
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('HTTP')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "value": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        },
+                                        "properties": {
+                                            "type": "object",
+                                            "properties": {
+                                                "provisioningState": {
+                                                    "type": "string"
+                                                },
+                                                "connectionState": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "status": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
+                                                "privateLinkResourceId": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "runAfter": {
+                    "HTTP": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_Pending_Array": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "PendingMPEs",
+                            "type": "Array",
+                            "value": []
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Parse_JSON": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "For_each": {
+                "type": "Foreach",
+                "foreach": "@body('Parse_JSON')?['value']",
+                "actions": {
+                    "Check_Condition": {
+                        "type": "If",
+                        "expression": {
+                            "or": [
+                                {
+                                    "not": {
+                                        "equals": [
+                                            "@coalesce(item()?['properties']?['provisioningState'], 'Unknown')",
+                                            "Succeeded"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "not": {
+                                        "equals": [
+                                            "@coalesce(item()?['properties']?['connectionState']?['status'], 'Unknown')",
+                                            "Approved"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "equals": [
+                                        "@empty(item()?['properties']?['connectionState'])",
+                                        true
+                                    ]
+                                }
+                            ]
+                        },
+                        "actions": {
+                            "Append_Pending": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "PendingMPEs",
+                                    "value": "@{concat('⚠️ MPE: ', coalesce(item()?['name'], 'Unknown'), ' | Provisioning: ', coalesce(item()?['properties']?['provisioningState'], 'Unknown'), ' | Approval: ', coalesce(item()?['properties']?['connectionState']?['status'], 'Missing'), '\nResourceId: ', coalesce(item()?['properties']?['privateLinkResourceId'], 'N/A'))}"
+                                }
+                            }
+                        },
+                        "else": {
+                            "actions": {}
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Initialize_Pending_Array": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Compose_Pending": {
+                "type": "Compose",
+                "inputs": "@{join(variables('PendingMPEs'), '\n\n')}",
+                "runAfter": {
+                    "For_each": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Check_If_Pending_Exists": {
+                "type": "If",
+                "expression": {
+                    "greater": [
+                        "@length(variables('PendingMPEs'))",
+                        0
+                    ]
+                },
+                "actions": {
+                    "Send_an_email_(V2)": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['outlook']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": {
+                                "To": "tejaswinimaddula110@gmail.com",
+                                "Subject": "⚠️ Synapse MPE Status Alert – Approval Needed",
+                                "Body": "<p class=\"editor-paragraph\">@{concat(  'Hi Team,<br><br>',  'The following Managed Private Endpoints (MPEs) are pending approval:<br><br>',  replace(join(variables('PendingMPEs'), '<br><br>'), '\n', '<br>'),  '<br><br>',  '🛠 <strong>Steps to Approve Each Managed Private Endpoint:</strong><br>',  '1. Go to <a href=\"https://portal.azure.com\" target=\"_blank\">Azure Portal</a> and sign in.<br>',  '2. Paste the <strong>ResourceId</strong> in the top search bar and press enter.<br>',  '3. Click the matching resource (Storage Account, Key Vault, etc.).<br>',  '4. In the left menu, go to <strong>Networking</strong>.<br>',  '5. Click on <strong>Private endpoint connections</strong> tab.<br>',  '6. Select the pending connection and click <strong>Approve</strong>.<br><br>',  '✅ Once approved, the status will change to <strong>Succeeded</strong>.<br><br>',  'Thank you,<br>Azure Automation')}</p>",
+                                "Importance": "Normal"
+                            },
+                            "path": "/v2/Mail"
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {}
+                },
+                "runAfter": {
+                    "Compose_Pending": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "outlook": {
+                    "id": "/subscriptions/1ad372fa-1532-4709-9b46-17de54fa0b71/providers/Microsoft.Web/locations/southcentralus/managedApis/outlook",
+                    "connectionId": "/subscriptions/1ad372fa-1532-4709-9b46-17de54fa0b71/resourceGroups/rg-synapse-demo/providers/Microsoft.Web/connections/outlook",
+                    "connectionName": "outlook"
+                }
+            }
+        }
+    }
+}
