@@ -1,4 +1,4 @@
-name: Deploy Managed Private Endpoints for Synapse
+name: Deploy Synapse Managed Private Endpoints & Credentials
 
 on:
   workflow_dispatch:
@@ -37,3 +37,68 @@ jobs:
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
           SYNAPSE_WORKSPACE_NAME: ${{ vars.SYNAPSE_WORKSPACE_NAME }}
+  
+  create-creds:
+    name: Create Synapse Credentials
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: PUT credentials from ./config/creditionals/${{ inputs.environment }}.json (poll + verify)
+        env:
+          WS:   ${{ vars.SYNAPSE_WORKSPACE_NAME }}   # e.g. synapsewsdemo123
+          FILE: ./config/creditionals/${{ inputs.environment }}.json
+        run: |
+          set -euo pipefail
+          test -f "$FILE" || { echo "Missing $FILE"; exit 1; }
+
+          TOKEN=$(az account get-access-token --scope https://dev.azuresynapse.net/.default --query accessToken -o tsv)
+          echo "::add-mask::$TOKEN"
+
+          jq -c '.[]' "$FILE" | while read -r row; do
+            NAME=$(echo "$row" | jq -r '.name')
+            UAMI=$(echo "$row" | jq -r '.uami')
+            [ -n "$NAME" ] && [ -n "$UAMI" ] || { echo "Bad entry: $row"; exit 1; }
+
+            URI="https://${WS}.dev.azuresynapse.net/credentials/${NAME}?api-version=2020-12-01"
+            BODY=$(jq -n --arg u "$UAMI" '{"properties":{"type":"ManagedIdentity","typeProperties":{"resourceId":$u}}}')
+
+            echo "PUT $NAME"
+            HDRS=$(mktemp)
+            CODE=$(curl -sS -w "%{http_code}" -D "$HDRS" -o /dev/null \
+                    -X PUT "$URI" \
+                    -H "Authorization: Bearer $TOKEN" \
+                    -H "Content-Type: application/json" \
+                    -H "If-Match: *" \
+                    --data "$BODY")
+            echo "HTTP $CODE"
+
+            # If async, poll the operationResults endpoint
+            if [ "$CODE" = "202" ]; then
+              LOC=$(awk '/^Location:/ {print $2}' "$HDRS" | tr -d '\r\n')
+              RA=$(awk '/^Retry-After:/ {print $2}' "$HDRS" | tr -d '\r\n'); [ -z "$RA" ] && RA=8
+              while [ -n "$LOC" ] && [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$LOC")" = "202" ]; do
+                sleep "$RA"
+              done
+            fi
+
+            # Verify: GET until available (handles eventual consistency)
+            for i in {1..12}; do
+              GCODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$URI")
+              [ "$GCODE" = "200" ] && break
+              sleep 5
+            done
+            [ "$GCODE" = "200" ] || { echo "Credential $NAME not available (last $GCODE)"; exit 1; }
+
+            echo "✔ $NAME ready"
+          done
