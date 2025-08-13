@@ -55,10 +55,10 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: PUT credentials from ./config/credentials/${{ inputs.environment }}.json (poll + verify)
+      - name: PUT credentials from ./configs/credentials/${{ inputs.environment }}.json (poll + verify)
         env:
           WS:   ${{ vars.SYNAPSE_WORKSPACE_NAME }}   # e.g. synapsewsdemo123
-          FILE: ./config/credentials/${{ inputs.environment }}.json
+          FILE: ./configs/credentials/${{ inputs.environment }}.json
         run: |
           set -euo pipefail
           test -f "$FILE" || { echo "Missing $FILE"; exit 1; }
