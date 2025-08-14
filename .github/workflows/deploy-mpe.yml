@@ -37,7 +37,7 @@ jobs:
         env:
           AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
           SYNAPSE_WORKSPACE_NAME: ${{ vars.SYNAPSE_WORKSPACE_NAME }}
-  
+
   create-creds:
     name: Create Synapse Credentials
     needs: deploy-mpes
@@ -55,7 +55,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: PUT credentials from ./configs/credentials/${{ inputs.environment }}.json (poll + verify)
+      - name: Ensure credentials from ./configs/credentials/${{ inputs.environment }}.json (skip if exists)
         env:
           WS:   ${{ vars.SYNAPSE_WORKSPACE_NAME }}   # e.g. synapsewsdemo123
           FILE: ./configs/credentials/${{ inputs.environment }}.json
@@ -72,9 +72,27 @@ jobs:
             [ -n "$NAME" ] && [ -n "$UAMI" ] || { echo "Bad entry: $row"; exit 1; }
 
             URI="https://${WS}.dev.azuresynapse.net/credentials/${NAME}?api-version=2020-12-01"
+
+            # --- GET to check existence ---
+            EXIST_CODE=$(curl -s -o /dev/null -w '%{http_code}' \
+              -X GET \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Accept: application/json" \
+              "$URI")
+            echo "GET $NAME -> HTTP $EXIST_CODE"
+
+            if [ "$EXIST_CODE" = "200" ]; then
+              echo "✔ Credential $NAME already exists — skipping"
+              continue
+            elif [ "$EXIST_CODE" != "404" ]; then
+              echo "Unexpected GET status for $NAME: $EXIST_CODE"
+              exit 1
+            fi
+
+            # --- Not found: create with PUT ---
             BODY=$(jq -n --arg u "$UAMI" '{"properties":{"type":"ManagedIdentity","typeProperties":{"resourceId":$u}}}')
 
-            echo "PUT $NAME"
+            echo "CREATE $NAME (PUT)"
             HDRS=$(mktemp)
             CODE=$(curl -sS -w "%{http_code}" -D "$HDRS" -o /dev/null \
                     -X PUT "$URI" \
@@ -82,18 +100,27 @@ jobs:
                     -H "Content-Type: application/json" \
                     -H "If-Match: *" \
                     --data "$BODY")
-            echo "HTTP $CODE"
+            echo "PUT -> HTTP $CODE"
 
-            # If async, poll the operationResults endpoint
+            # If async, poll the Location until completion
             if [ "$CODE" = "202" ]; then
               LOC=$(awk '/^Location:/ {print $2}' "$HDRS" | tr -d '\r\n')
               RA=$(awk '/^Retry-After:/ {print $2}' "$HDRS" | tr -d '\r\n'); [ -z "$RA" ] && RA=8
-              while [ -n "$LOC" ] && [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$LOC")" = "202" ]; do
-                sleep "$RA"
-              done
+              if [ -n "$LOC" ]; then
+                echo "Polling $LOC every ${RA}s..."
+                for i in {1..15}; do
+                  OP=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$LOC")
+                  echo "operationResults -> HTTP $OP"
+                  [ "$OP" != "202" ] && break
+                  sleep "$RA"
+                done
+              fi
+            elif [ "$CODE" -ge 400 ]; then
+              echo "Creation failed for $NAME (HTTP $CODE)"
+              exit 1
             fi
 
-            # Verify: GET until available (handles eventual consistency)
+            # Verify availability (eventual consistency)
             for i in {1..12}; do
               GCODE=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" "$URI")
               [ "$GCODE" = "200" ] && break
